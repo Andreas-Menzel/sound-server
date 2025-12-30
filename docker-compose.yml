@@ -1,0 +1,25 @@
+services:
+  tts:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: piper-tts-service
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount local audio files directory
+      - ./audio_files:/app/audio
+    environment:
+      # PulseAudio TCP server on the host
+      - PULSE_SERVER=tcp:host.docker.internal:4713
+    extra_hosts:
+      # This mapping makes host.docker.internal work on Linux
+      # On macOS, this is already built-in but having it here doesn't hurt
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
