@@ -78,6 +78,7 @@ VOICES = {
 
 class TTSResponse(BaseModel):
     """Response model for TTS operations."""
+
     success: bool
     message: str
     filename: Optional[str] = None
@@ -91,7 +92,7 @@ def get_model_path(voice_name: Optional[str] = None) -> Path:
         available = list(VOICES.keys())
         raise HTTPException(
             status_code=404,
-            detail=f"Voice '{voice}' not found. Available: {available}. See GET /voices"
+            detail=f"Voice '{voice}' not found. Available: {available}. See GET /voices",
         )
     return model_path
 
@@ -101,8 +102,10 @@ def run_piper(text: str, output_path: Path, model_path: Path) -> None:
     try:
         cmd = [
             "piper",
-            "--model", str(model_path),
-            "--output_file", str(output_path),
+            "--model",
+            str(model_path),
+            "--output_file",
+            str(output_path),
         ]
         logger.info(f"Running Piper: {' '.join(cmd)}")
 
@@ -117,8 +120,7 @@ def run_piper(text: str, output_path: Path, model_path: Path) -> None:
         if result.returncode != 0:
             logger.error(f"Piper stderr: {result.stderr}")
             raise HTTPException(
-                status_code=500,
-                detail=f"Piper TTS failed: {result.stderr}"
+                status_code=500, detail=f"Piper TTS failed: {result.stderr}"
             )
 
     except subprocess.TimeoutExpired:
@@ -130,7 +132,9 @@ def run_piper(text: str, output_path: Path, model_path: Path) -> None:
 def play_audio(file_path: Path) -> None:
     """Play audio file using paplay via PulseAudio TCP."""
     if not file_path.exists():
-        raise HTTPException(status_code=404, detail=f"Audio file not found: {file_path.name}")
+        raise HTTPException(
+            status_code=404, detail=f"Audio file not found: {file_path.name}"
+        )
 
     env = os.environ.copy()
     env["PULSE_SERVER"] = PULSE_SERVER
@@ -152,7 +156,7 @@ def play_audio(file_path: Path) -> None:
             raise HTTPException(
                 status_code=500,
                 detail=f"Audio playback failed: {result.stderr}. "
-                       f"Ensure PulseAudio TCP is running on host (PULSE_SERVER={PULSE_SERVER})"
+                f"Ensure PulseAudio TCP is running on host (PULSE_SERVER={PULSE_SERVER})",
             )
 
     except subprocess.TimeoutExpired:
@@ -189,7 +193,9 @@ async def health():
         paplay_ok = False
 
     # List installed voices
-    installed_voices = [f.stem for f in MODELS_DIR.glob("*.onnx")] if MODELS_DIR.exists() else []
+    installed_voices = (
+        [f.stem for f in MODELS_DIR.glob("*.onnx")] if MODELS_DIR.exists() else []
+    )
 
     return {
         "piper_available": piper_ok,
@@ -207,7 +213,9 @@ async def list_voices(
 ):
     """List all available voices with metadata."""
     # Check which voices are actually installed
-    installed = {f.stem for f in MODELS_DIR.glob("*.onnx")} if MODELS_DIR.exists() else set()
+    installed = (
+        {f.stem for f in MODELS_DIR.glob("*.onnx")} if MODELS_DIR.exists() else set()
+    )
 
     voices = {}
     for name, meta in VOICES.items():
@@ -225,12 +233,18 @@ async def list_voices(
     }
 
 
+class SayRequest(BaseModel):
+    """Request model for TTS say operation."""
+
+    text: str
+    voice: Optional[str] = None
+
+
 @app.post("/say", response_model=TTSResponse)
-async def say(
-    text: str = Query(..., min_length=1, max_length=5000, description="Text to synthesize"),
-    voice: Optional[str] = Query(None, description="Voice to use (see /voices for options)"),
-):
+async def say(request: SayRequest):
     """Generate speech from text and play it."""
+    text = request.text
+    voice = request.voice
     model_path = get_model_path(voice)
 
     # Temporary file for audio
@@ -289,4 +303,5 @@ async def list_files():
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
